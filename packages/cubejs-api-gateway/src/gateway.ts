@@ -533,7 +533,7 @@ class ApiGateway {
     try {
       await this.assertApiScope('meta', context.securityContext);
       const compilerApi = await this.getCompilerApi(context);
-      const metaConfigExtended = compilerApi.metaConfigExtended({
+      const metaConfigExtended = await compilerApi.metaConfigExtended({
         requestId: context.requestId,
       });
       const { metaConfig, cubeDefinitions } = metaConfigExtended;
