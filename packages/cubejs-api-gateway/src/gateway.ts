@@ -1522,8 +1522,8 @@ class ApiGateway {
 
       let metaConfigResult = await (await this
         .getCompilerApi(context)).metaConfig({
-          requestId: context.requestId
-        });
+        requestId: context.requestId
+      });
 
       metaConfigResult = this.filterVisibleItemsInMeta(context, metaConfigResult);
 
