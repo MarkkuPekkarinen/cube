@@ -188,8 +188,23 @@ export type Sql4SqlCommon = {
 export type Sql4SqlResponse = Sql4SqlCommon & (Sql4SqlOk | Sql4SqlError);
 
 export type QueryConvertResponse = {
-  status: string;
+  status: 'ok' | 'error';
   query: any;
+  error?: string;
+};
+
+export type SqlFilterItem = {
+  member?: string;
+  operator?: string;
+  values?: string[];
+  and?: SqlFilterItem[];
+  or?: SqlFilterItem[];
+};
+
+export type SqlFiltersResponse = {
+  status: 'ok' | 'error';
+  sql?: string;
+  filters?: SqlFilterItem[];
   error?: string;
 };
 
@@ -496,9 +511,90 @@ export const rest4sql = async (instance: SqlInterfaceInstance, sqlQuery: string,
   return native.rest4sql(instance, sqlQuery, securityContext ? JSON.stringify(securityContext) : null);
 };
 
-export const buildSqlAndParams = (cubeEvaluator: any): any[] => {
+export const getSqlFilters = async (instance: SqlInterfaceInstance, sqlQuery: string, securityContext?: unknown): Promise<SqlFiltersResponse> => {
   const native = loadNative();
-  return native.buildSqlAndParams(cubeEvaluator);
+
+  return native.getSqlFilters(instance, sqlQuery, securityContext ? JSON.stringify(securityContext) : null);
+};
+
+export const addSqlFilters = async (instance: SqlInterfaceInstance, sqlQuery: string, filters: SqlFilterItem[], securityContext?: unknown): Promise<SqlFiltersResponse> => {
+  const native = loadNative();
+
+  return native.addSqlFilters(instance, sqlQuery, JSON.stringify(filters), securityContext ? JSON.stringify(securityContext) : null);
+};
+
+export const setSqlFilters = async (instance: SqlInterfaceInstance, sqlQuery: string, filters: SqlFilterItem[], securityContext?: unknown): Promise<SqlFiltersResponse> => {
+  const native = loadNative();
+
+  return native.setSqlFilters(instance, sqlQuery, JSON.stringify(filters), securityContext ? JSON.stringify(securityContext) : null);
+};
+
+export const deleteSqlFilters = async (instance: SqlInterfaceInstance, sqlQuery: string, filters: SqlFilterItem[], securityContext?: unknown): Promise<SqlFiltersResponse> => {
+  const native = loadNative();
+
+  return native.deleteSqlFilters(instance, sqlQuery, JSON.stringify(filters), securityContext ? JSON.stringify(securityContext) : null);
+};
+
+export const replaceSqlFilters = async (instance: SqlInterfaceInstance, sqlQuery: string, oldFilters: SqlFilterItem[], newFilters: SqlFilterItem[], securityContext?: unknown): Promise<SqlFiltersResponse> => {
+  const native = loadNative();
+
+  return native.replaceSqlFilters(instance, sqlQuery, JSON.stringify(oldFilters), JSON.stringify(newFilters), securityContext ? JSON.stringify(securityContext) : null);
+};
+
+/**
+ * Native planner state shared by the queries against one compiled data model,
+ * such as the compiled SQL templates of each dialect. Opaque on the JS side.
+ */
+export type ModelContext = { readonly __brand: 'ModelContext' };
+
+export const newModelContext = (): ModelContext => loadNative().newModelContext();
+
+/**
+ * Mirrors `BaseQueryOptions` in `cubesqlplanner/src/cube_bridge/base_query_options.rs`. Nested
+ * structures and schema-compiler objects are `unknown`: the planner validates them on deserialization.
+ */
+export type NativeQueryOptions = {
+  /** Member names or member expression definitions. */
+  measures?: (string | object)[];
+  dimensions?: (string | object)[];
+  segments?: (string | object)[];
+  timeDimensions?: unknown[];
+  timezone?: string;
+  filters?: unknown[];
+  order?: unknown[];
+  limit?: string | null;
+  rowLimit?: string | null;
+  offset?: string | null;
+  ungrouped?: boolean;
+  exportAnnotatedSql: boolean;
+  preAggregationQuery?: boolean;
+  preAggregationsMatchOnly?: boolean;
+  useOriginalSqlPreAggregationsInPreAggregation?: boolean;
+  totalQuery?: boolean;
+  cubestoreSupportMultistage?: boolean;
+  multiStageLeafMerge?: boolean;
+  cubestoreUnionFullKeyAggregate?: boolean;
+  maxMultiStageDepth?: number;
+  maxMultiStageStages?: number;
+  maxMemberResolutionDepth?: number;
+  disableExternalPreAggregations: boolean;
+  preAggregationId?: string | null;
+  convertTzForRawTimeDimension?: boolean;
+  maskedMembers?: unknown[];
+  memberToAlias?: Record<string, string>;
+  /** The data source whose dialect builds the query: its compiled templates are cached under it. `null` doesn't cache. */
+  dataSource?: string | null;
+  joinHints?: (string | string[])[];
+  subqueryJoins?: unknown[];
+  cubeEvaluator: unknown;
+  baseTools: unknown;
+  joinGraph: unknown;
+  securityContext: unknown;
+};
+
+export const buildSqlAndParams = (queryOptions: NativeQueryOptions, modelContext: ModelContext): any[] => {
+  const native = loadNative();
+  return native.buildSqlAndParams(queryOptions, modelContext);
 };
 
 export type ResultRow = Record<string, string>;

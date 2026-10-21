@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { FROM_PARTITION_RANGE, MAX_SOURCE_ROW_LIMIT } from '@cubejs-backend/shared';
+import { Compilers } from '../../src/compiler/PrepareCompiler';
 import { prepareJsCompiler, prepareYamlCompiler } from './PrepareCompiler';
 import { createECommerceSchema, createSchemaYaml } from './utils';
 import { PostgresQuery, queryClass, QueryFactory } from '../../src';
@@ -28,7 +29,7 @@ class OpenedPostgresQuery extends PostgresQuery {
 describe('pre-aggregations', () => {
   it('rollupJoin scheduledRefresh', async () => {
     process.env.CUBEJS_SCHEDULED_REFRESH_DEFAULT = 'true';
-    const { compiler, cubeEvaluator } = prepareJsCompiler(
+    const compilers = prepareJsCompiler(
       `
         cube(\`Users\`, {
           sql: \`SELECT * FROM public.users\`,
@@ -108,15 +109,15 @@ describe('pre-aggregations', () => {
       `
     );
 
-    await compiler.compile();
+    await compilers.compile();
 
-    expect(cubeEvaluator.cubeFromPath('Users').preAggregations.usersRollup.scheduledRefresh).toEqual(true);
-    expect(cubeEvaluator.cubeFromPath('Orders').preAggregations.ordersRollup.scheduledRefresh).toEqual(true);
-    expect(cubeEvaluator.cubeFromPath('Orders').preAggregations.ordersRollupJoin.scheduledRefresh).toEqual(undefined);
+    expect(compilers.cubeEvaluator.cubeFromPath('Users').preAggregations.usersRollup.scheduledRefresh).toEqual(true);
+    expect(compilers.cubeEvaluator.cubeFromPath('Orders').preAggregations.ordersRollup.scheduledRefresh).toEqual(true);
+    expect(compilers.cubeEvaluator.cubeFromPath('Orders').preAggregations.ordersRollupJoin.scheduledRefresh).toEqual(undefined);
   });
 
   it('query rollupLambda', async () => {
-    const { compiler, cubeEvaluator, joinGraph } = prepareJsCompiler(
+    const compilers = prepareJsCompiler(
       `
         cube(\`Users\`, {
           sql: \`SELECT * FROM public.users\`,
@@ -219,9 +220,9 @@ describe('pre-aggregations', () => {
       `
     );
 
-    await compiler.compile();
+    await compilers.compile();
 
-    const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+    const query = compilers.createQuery(PostgresQuery, {
       measures: [
         'Orders.count'
       ],
@@ -251,7 +252,7 @@ describe('pre-aggregations', () => {
     ['tesseract', true],
     ['legacy planner', false],
   ])('rollup query with memberToAlias reads rollup columns by their own names (%s)', async (_, useNativeSqlPlanner) => {
-    const { compiler, cubeEvaluator, joinGraph } = prepareJsCompiler(
+    const compilers = prepareJsCompiler(
       `
         cube('Orders', {
           sql: 'SELECT * FROM orders',
@@ -284,9 +285,9 @@ describe('pre-aggregations', () => {
       `
     );
 
-    await compiler.compile();
+    await compilers.compile();
 
-    const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+    const query = compilers.createQuery(PostgresQuery, {
       measures: ['Orders.count'],
       dimensions: ['Orders.status'],
       memberToAlias: {
@@ -352,10 +353,10 @@ describe('pre-aggregations', () => {
     );
 
     const lambdaQueryFor = async (timeDimensions: any[], timezone: string = 'UTC') => {
-      const { compiler, cubeEvaluator, joinGraph } = compileEvents();
-      await compiler.compile();
+      const compilers = compileEvents();
+      await compilers.compile();
 
-      const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+      const query = compilers.createQuery(PostgresQuery, {
         measures: ['Events.count'],
         timeDimensions,
         timezone,
@@ -428,10 +429,10 @@ describe('pre-aggregations', () => {
       });
 
       const sourceDateRangeFor = async (timeDimensions: any[], usageInfos?: any[]) => {
-        const { compiler, cubeEvaluator, joinGraph } = compileEvents();
-        await compiler.compile();
+        const compilers = compileEvents();
+        await compilers.compile();
 
-        const query = new OpenedPostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+        const query = compilers.createQuery(OpenedPostgresQuery, {
           measures: ['Events.count'],
           timeDimensions,
           timezone: 'UTC',
@@ -516,13 +517,13 @@ describe('pre-aggregations', () => {
 
   // @link https://github.com/cube-js/cube/issues/6623
   it('view and pre-aggregation granularity', async () => {
-    const { compiler, cubeEvaluator, joinGraph } = prepareYamlCompiler(
+    const compilers = prepareYamlCompiler(
       createSchemaYaml(createECommerceSchema())
     );
 
-    await compiler.compile();
+    await compilers.compile();
 
-    const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+    const query = compilers.createQuery(PostgresQuery, {
       measures: [
         'orders_view.count'
       ],
@@ -548,13 +549,13 @@ describe('pre-aggregations', () => {
   });
 
   it('view and pre-aggregation granularity two level', async () => {
-    const { compiler, cubeEvaluator, joinGraph } = prepareYamlCompiler(
+    const compilers = prepareYamlCompiler(
       createSchemaYaml(createECommerceSchema())
     );
 
-    await compiler.compile();
+    await compilers.compile();
 
-    const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+    const query = compilers.createQuery(PostgresQuery, {
       measures: [
         'orders_view.count'
       ],
@@ -580,13 +581,13 @@ describe('pre-aggregations', () => {
   });
 
   it('view and pre-aggregation granularity with additional filters test', async () => {
-    const { compiler, cubeEvaluator, joinGraph } = prepareYamlCompiler(
+    const compilers = prepareYamlCompiler(
       createSchemaYaml(createECommerceSchema())
     );
 
-    await compiler.compile();
+    await compilers.compile();
 
-    const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+    const query = compilers.createQuery(PostgresQuery, {
       measures: [
         'orders_view.count'
       ],
@@ -630,13 +631,13 @@ describe('pre-aggregations', () => {
   });
 
   it('pre-aggregation with indexes descriptions', async () => {
-    const { compiler, cubeEvaluator, joinGraph } = prepareYamlCompiler(
+    const compilers = prepareYamlCompiler(
       createSchemaYaml(createECommerceSchema())
     );
 
-    await compiler.compile();
+    await compilers.compile();
 
-    const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+    const query = compilers.createQuery(PostgresQuery, {
       measures: [
         'orders_indexes.count'
       ],
@@ -656,7 +657,7 @@ describe('pre-aggregations', () => {
   });
 
   it('pre-aggregation index with time dimension granularity column', async () => {
-    const { compiler, cubeEvaluator, joinGraph } = prepareJsCompiler(
+    const compilers = prepareJsCompiler(
       `
         cube('Orders', {
           sql: \`SELECT * FROM orders\`,
@@ -698,9 +699,9 @@ describe('pre-aggregations', () => {
       `
     );
 
-    await compiler.compile();
+    await compilers.compile();
 
-    const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+    const query = compilers.createQuery(PostgresQuery, {
       measures: ['Orders.count'],
       timeDimensions: [{
         dimension: 'Orders.created_at',
@@ -730,7 +731,7 @@ describe('pre-aggregations', () => {
   });
 
   it('pre-aggregation index with time dimension granularity column (YAML)', async () => {
-    const { compiler, cubeEvaluator, joinGraph } = prepareYamlCompiler(
+    const compilers = prepareYamlCompiler(
       createSchemaYaml({
         cubes: [
           {
@@ -772,9 +773,9 @@ describe('pre-aggregations', () => {
       })
     );
 
-    await compiler.compile();
+    await compilers.compile();
 
-    const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+    const query = compilers.createQuery(PostgresQuery, {
       measures: ['orders.count'],
       timeDimensions: [{
         dimension: 'orders.created_at',
@@ -800,7 +801,7 @@ describe('pre-aggregations', () => {
   });
 
   it('pre-aggregation with FILTER_PARAMS', async () => {
-    const { compiler, cubeEvaluator, joinGraph } = prepareYamlCompiler(
+    const compilers = prepareYamlCompiler(
       createSchemaYaml({
         cubes: [
           {
@@ -855,7 +856,7 @@ describe('pre-aggregations', () => {
       })
     );
 
-    await compiler.compile();
+    await compilers.compile();
 
     // It's important to provide a queryFactory, as it triggers flow
     // with paramAllocator reset in BaseQuery->newSubQueryForCube()
@@ -865,7 +866,7 @@ describe('pre-aggregations', () => {
       }
     );
 
-    const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+    const query = compilers.createQuery(PostgresQuery, {
       measures: [
         'orders.count'
       ],
@@ -886,7 +887,7 @@ describe('pre-aggregations', () => {
   });
 
   it('pre-aggregation match for only td query', async () => {
-    const { compiler, cubeEvaluator, joinGraph } = prepareYamlCompiler(
+    const compilers = prepareYamlCompiler(
       createSchemaYaml({
         cubes: [
           {
@@ -922,13 +923,13 @@ describe('pre-aggregations', () => {
       })
     );
 
-    await compiler.compile();
+    await compilers.compile();
 
     // It's important to provide a queryFactory, as it triggers flow
     // with paramAllocator reset in BaseQuery->newSubQueryForCube()
     const queryFactory = new QueryFactory({ default: PostgresQuery });
 
-    const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+    const query = compilers.createQuery(PostgresQuery, {
       timeDimensions: [{
         dimension: 'orders.created_at',
         granularity: 'day',
@@ -942,13 +943,13 @@ describe('pre-aggregations', () => {
   });
 
   it('no-cache should still match pre-aggregations', async () => {
-    const { compiler, cubeEvaluator, joinGraph } = prepareYamlCompiler(
+    const compilers = prepareYamlCompiler(
       createSchemaYaml(createECommerceSchema())
     );
 
-    await compiler.compile();
+    await compilers.compile();
 
-    const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+    const query = compilers.createQuery(PostgresQuery, {
       measures: [
         'orders_view.count'
       ],
@@ -958,7 +959,6 @@ describe('pre-aggregations', () => {
         dateRange: ['2023-01-01', '2023-01-10']
       }],
       timezone: 'America/Los_Angeles',
-      cacheMode: 'no-cache',
     });
 
     const queryPreAggs: any = query.preAggregations?.preAggregationsDescription();
@@ -967,7 +967,7 @@ describe('pre-aggregations', () => {
   });
 
   it('no-cache should still use external pre-aggregations', async () => {
-    const { compiler, cubeEvaluator, joinGraph } = prepareYamlCompiler(
+    const compilers = prepareYamlCompiler(
       createSchemaYaml({
         cubes: [
           {
@@ -1004,9 +1004,9 @@ describe('pre-aggregations', () => {
       })
     );
 
-    await compiler.compile();
+    await compilers.compile();
 
-    const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+    const query = compilers.createQuery(PostgresQuery, {
       measures: ['orders.count'],
       dimensions: ['orders.status'],
       timeDimensions: [{
@@ -1014,7 +1014,6 @@ describe('pre-aggregations', () => {
         granularity: 'day',
         dateRange: ['2023-01-01', '2023-01-10']
       }],
-      cacheMode: 'no-cache',
       externalQueryClass: PostgresQuery,
     });
 
@@ -1119,10 +1118,10 @@ describe('pre-aggregations', () => {
     );
 
     const preAggregationsFor = async (query: Record<string, any>, preAggregationName: string) => {
-      const { compiler, cubeEvaluator, joinGraph } = compileEvents();
-      await compiler.compile();
+      const compilers = compileEvents();
+      await compilers.compile();
 
-      const { preAggregations } = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+      const { preAggregations } = compilers.createQuery(PostgresQuery, {
         measures: ['Events.count'],
         timezone: 'UTC',
         ...query,
@@ -1279,21 +1278,19 @@ describe('pre-aggregations', () => {
   });
 
   describe('rollup with multiplied measure', () => {
-    let compiler;
-    let cubeEvaluator;
-    let joinGraph;
+    let compilers: Compilers;
 
     beforeAll(async () => {
       const modelContent = fs.readFileSync(
         path.join(process.cwd(), '/test/unit/fixtures/orders_and_items_multiplied_pre_agg.yml'),
         'utf8'
       );
-      ({ compiler, cubeEvaluator, joinGraph } = prepareYamlCompiler(modelContent));
-      await compiler.compile();
+      compilers = prepareYamlCompiler(modelContent);
+      await compilers.compile();
     });
 
     it('measure is unmultiplied in query but multiplied in pre-agg', async () => {
-      const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+      const query = compilers.createQuery(PostgresQuery, {
         measures: [
           'orders.total_qty'
         ],
@@ -1315,7 +1312,7 @@ describe('pre-aggregations', () => {
     });
 
     it('measure is unmultiplied in query but multiplied in pre-agg + granularity', async () => {
-      const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+      const query = compilers.createQuery(PostgresQuery, {
         measures: [
           'orders.total_qty'
         ],
@@ -1338,7 +1335,7 @@ describe('pre-aggregations', () => {
     });
 
     it('measure is unmultiplied in query but multiplied in pre-agg + granularity + local dimension', async () => {
-      const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+      const query = compilers.createQuery(PostgresQuery, {
         measures: [
           'orders.total_qty'
         ],
@@ -1363,7 +1360,7 @@ describe('pre-aggregations', () => {
     });
 
     it('measure is unmultiplied in query but multiplied in pre-agg + granularity + external dimension', async () => {
-      const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+      const query = compilers.createQuery(PostgresQuery, {
         measures: [
           'orders.total_qty'
         ],
@@ -1388,7 +1385,7 @@ describe('pre-aggregations', () => {
     });
 
     it('partial-match of query with pre-agg: 1 measure + all dimensions, no granularity', async () => {
-      const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+      const query = compilers.createQuery(PostgresQuery, {
         measures: [
           'orders.total_qty'
         ],
@@ -1413,7 +1410,7 @@ describe('pre-aggregations', () => {
     });
 
     it('full-match of query with pre-agg: 1 measure + granularity + all dimensions', async () => {
-      const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+      const query = compilers.createQuery(PostgresQuery, {
         measures: [
           'orders.total_qty'
         ],
@@ -1440,7 +1437,7 @@ describe('pre-aggregations', () => {
   });
 
   describe('originalSql pre-aggregation with sqlTable', () => {
-    const { compiler, joinGraph, cubeEvaluator } = prepareJsCompiler(`
+    const compilers = prepareJsCompiler(`
       cube(\`orders\`, {
         sqlTable: \`public.orders\`,
 
@@ -1480,11 +1477,11 @@ describe('pre-aggregations', () => {
     `);
 
     beforeAll(async () => {
-      await compiler.compile();
+      await compilers.compile();
     });
 
     it('generates sql and loadSql for non-partitioned originalSql pre-aggregation', async () => {
-      const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+      const query = compilers.createQuery(PostgresQuery, {
         measures: ['orders.count'],
         dimensions: ['orders.status'],
         preAggregationsSchema: '',
@@ -1502,7 +1499,7 @@ describe('pre-aggregations', () => {
     });
 
     it('generates sql and loadSql for partitioned originalSql pre-aggregation', async () => {
-      const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+      const query = compilers.createQuery(PostgresQuery, {
         measures: ['orders.count'],
         timeDimensions: [{
           dimension: 'orders.created_at',
@@ -1530,7 +1527,7 @@ describe('pre-aggregations', () => {
   // building the outer query's rolling-window time series — which can't render without a date
   // range on dialects that lack generated time series (e.g. Redshift). Pure matching, no DB.
   describe('rolling pre-aggregation matching without a date range', () => {
-    const { compiler, joinGraph, cubeEvaluator } = prepareJsCompiler(`
+    const compilers = prepareJsCompiler(`
       cube(\`visitors\`, {
         sql: \`SELECT * FROM visitors\`,
 
@@ -1576,12 +1573,12 @@ describe('pre-aggregations', () => {
     `);
 
     beforeAll(async () => {
-      await compiler.compile();
+      await compilers.compile();
     });
 
     [PostgresQuery, RedshiftQuery].forEach((QueryClass) => {
       it(`matches the rolling pre-aggregation (${QueryClass.name})`, async () => {
-        const query = new QueryClass({ joinGraph, cubeEvaluator, compiler }, {
+        const query = compilers.createQuery(QueryClass, {
           measures: ['visitors.rollingCount'],
           dimensions: ['visitors.source'],
           timeDimensions: [{
@@ -1608,7 +1605,7 @@ describe('pre-aggregations', () => {
   // re-plans the query and must receive those hints too — without them it fails with
   // "Can't find join path to join 'products', 'customers'".
   describe('pre-aggregation matching with query-level join hints', () => {
-    const { compiler, joinGraph, cubeEvaluator } = prepareJsCompiler(`
+    const compilers = prepareJsCompiler(`
       cube(\`orders\`, {
         sql: \`SELECT * FROM orders\`,
 
@@ -1674,11 +1671,11 @@ describe('pre-aggregations', () => {
     `);
 
     beforeAll(async () => {
-      await compiler.compile();
+      await compilers.compile();
     });
 
     it('matching does not lose query-level join hints', async () => {
-      const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+      const query = compilers.createQuery(PostgresQuery, {
         measures: [],
         dimensions: ['products.name'],
         filters: [{
@@ -1702,7 +1699,7 @@ describe('pre-aggregations', () => {
   // so the query's joinHints are the only thing naming a root; dropping them while
   // matching throws "Can't find join path to join 'users', 'line_items'".
   describe('a rollup that cannot serve the query does not change how it is planned', () => {
-    const { compiler, joinGraph, cubeEvaluator } = prepareYamlCompiler(`
+    const compilers = prepareYamlCompiler(`
 cubes:
   - name: base_orders
     sql: SELECT * FROM orders
@@ -1785,7 +1782,7 @@ cubes:
 `);
 
     beforeAll(async () => {
-      await compiler.compile();
+      await compilers.compile();
     });
 
     describe.each([
@@ -1793,7 +1790,7 @@ cubes:
       ['native planner', true],
     ])('%s', (_name, useNativeSqlPlanner) => {
       it('plans a multi-cube query along its own join hints', async () => {
-        const query = new OpenedPostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+        const query = compilers.createQuery(OpenedPostgresQuery, {
           measures: ['base_orders.count', 'line_items.count'],
           dimensions: ['users.state'],
           joinHints: [
@@ -1867,9 +1864,9 @@ cubes:
     `;
 
     const chainQuery = async (schema: string) => {
-      const { compiler, joinGraph, cubeEvaluator } = prepareJsCompiler(schema);
-      await compiler.compile();
-      return new OpenedPostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+      const compilers = prepareJsCompiler(schema);
+      await compilers.compile();
+      return compilers.createQuery(OpenedPostgresQuery, {
         measures: [],
         dimensions: ['cube_w.dim_w', 'cube_x.dim_x', 'cube_y.dim_y', 'cube_z.dim_z'],
         timezone: 'UTC',
@@ -1905,7 +1902,7 @@ cubes:
   // A rollup stores a time dimension truncated to its granularity, so two legs that declare
   // the join key at different granularities hold values that can't be compared.
   describe('rollupJoin whose legs truncate the join key differently', () => {
-    const { compiler, joinGraph, cubeEvaluator } = prepareJsCompiler(
+    const compilers = prepareJsCompiler(
       `
         cube('td_dates', {
           sql: \`SELECT '2026-01-01'::timestamp as day, 'Q1' as quarter_label\`,
@@ -1941,11 +1938,11 @@ cubes:
     );
 
     beforeAll(async () => {
-      await compiler.compile();
+      await compilers.compile();
     });
 
     it('rejects the join instead of comparing differently truncated columns', async () => {
-      const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+      const query = compilers.createQuery(PostgresQuery, {
         measures: ['td_facts.total_amount'],
         dimensions: ['td_dates.quarter_label'],
         timeDimensions: [{ dimension: 'td_facts.day', granularity: 'day' }],
@@ -1967,7 +1964,7 @@ cubes:
   describe('cubes joined only through a hub', () => {
     // `entities` is reachable only through `hub`, so the members of `ledger`, `categories` and
     // `entities` have no join root on their own.
-    const { compiler, joinGraph, cubeEvaluator } = prepareYamlCompiler(`
+    const compilers = prepareYamlCompiler(`
 cubes:
   - name: hub
     sql: "SELECT 1 AS id, 'o1' AS org_id, 'e1' AS entity_id, 'm1' AS management_id"
@@ -2087,13 +2084,10 @@ cubes:
 `);
 
     beforeAll(async () => {
-      await compiler.compile();
+      await compilers.compile();
     });
 
-    const sqlFor = (useNativeSqlPlanner: boolean, query: Record<string, unknown>) => new PostgresQuery(
-      { joinGraph, cubeEvaluator, compiler },
-      { ...query, timezone: 'UTC', preAggregationsSchema: '', useNativeSqlPlanner } as any
-    ).buildSqlAndParams()[0];
+    const sqlFor = (useNativeSqlPlanner: boolean, query: Record<string, unknown>) => compilers.createQuery(PostgresQuery, { ...query, timezone: 'UTC', preAggregationsSchema: '', useNativeSqlPlanner } as any).buildSqlAndParams()[0];
 
     for (const useNativeSqlPlanner of [true, false]) {
       const planner = useNativeSqlPlanner ? 'tesseract' : 'legacy';
@@ -2124,7 +2118,7 @@ cubes:
   // The native build already matches pre-aggregations, so asking for the match after it
   // must not run the planner again. The call order in `getSql` is covered by CompilerApi.test.
   describe('native planner reuses the build\'s pre-aggregation match', () => {
-    const { compiler, joinGraph, cubeEvaluator } = prepareJsCompiler(`
+    const compilers = prepareJsCompiler(`
       cube('visits', {
         sql: \`SELECT 1 AS id, 'a' AS source, 'b' AS browser\`,
         measures: { count: { type: 'count' } },
@@ -2140,11 +2134,11 @@ cubes:
     `);
 
     beforeAll(async () => {
-      await compiler.compile();
+      await compilers.compile();
     });
 
     const buildThenMatch = (dimension: string) => {
-      const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
+      const query = compilers.createQuery(PostgresQuery, {
         measures: ['visits.count'],
         dimensions: [dimension],
         timezone: 'UTC',
